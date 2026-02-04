@@ -4,8 +4,8 @@ import time
 import threading
 import tkinter as tk
 import keyboard
-import json  # <--- New library for saving settings
-import os    # <--- To check if file exists
+import json  
+import os    
 import ocr_engine as engine  
 import overlay_ui as ui      
 
@@ -32,9 +32,10 @@ class App:
         # Initialize Overlay
         self.selector = ui.SelectionOverlay(self.root, None)
 
-        print("--- ZZZ OVERLAY TRANSLATOR (Persistent Config) ---")
+        print("--- ZZZ OVERLAY TRANSLATOR (Full Features) ---")
         print("CTRL+ALT+S -> START SETUP (Select Name -> Then Dialogue)")
-        print("CTRL+ALT+T -> Translate (Manual)")
+        print("CTRL+ALT+T -> Translate Saved Dialogue (Manual)")
+        print("CTRL+ALT+F -> FREE TRANSLATE (Select any area once)") # <--- NEW
         print("CTRL+ALT+A -> Toggle Auto-Mode")
         print("CTRL+ALT+D -> Switch Threshold Mode")
 
@@ -42,7 +43,8 @@ class App:
         self.load_config()
 
         keyboard.add_hotkey('ctrl+alt+s', self.start_selection_sequence)
-        keyboard.add_hotkey('ctrl+alt+t', lambda: self.run_in_thread(self.translate_single))
+        keyboard.add_hotkey('ctrl+alt+t', lambda: self.run_in_thread(self.translate_saved))
+        keyboard.add_hotkey('ctrl+alt+f', self.start_free_mode) # <--- NEW HOTKEY
         keyboard.add_hotkey('ctrl+alt+a', self.toggle_auto_mode)
         keyboard.add_hotkey('ctrl+alt+d', self.switch_mode)
         
@@ -63,7 +65,6 @@ class App:
                     if self.saved_name_area: print(f"   Name Area: {self.saved_name_area}")
                     if self.saved_dialogue_area: print(f"   Dialogue Area: {self.saved_dialogue_area}")
                     print(f"   Threshold: {self.active_threshold}")
-                    print("   You can start Auto-Mode immediately (CTRL+ALT+A).")
             except Exception as e:
                 print(f"Error loading config: {e}")
 
@@ -92,10 +93,9 @@ class App:
             self.active_threshold = 150
             print("\n>>> STANDARD (150)")
         self.last_text_read = ""
-        # Save preference immediately
         self.save_config()
 
-    # --- SELECTION LOGIC ---
+    # --- SELECTION LOGIC (SETUP) ---
     def start_selection_sequence(self):
         print("\n>>> STEP 1: Select CHARACTER NAME Area...")
         self.selector.callback = self.on_name_selected
@@ -113,14 +113,36 @@ class App:
         self.saved_dialogue_area = coords
         print(f"Dialogue Area Saved: {coords}")
         print(">>> SETUP COMPLETE! Saving to config...")
-        
-        # SAVE EVERYTHING TO FILE
         self.save_config()
-        
         self.last_text_read = "" 
-        self.run_in_thread(self.translate_single)
+        self.run_in_thread(self.translate_saved)
 
-    # --- MAIN LOGIC ---
+    # --- FREE MODE LOGIC (NEW) ---
+    def start_free_mode(self):
+        """Starts a one-time selection that doesn't save coordinates."""
+        print("\n>>> FREE TRANSLATION MODE STARTED")
+        self.selector.callback = self.on_free_area_selected
+        self.run_in_thread(lambda: self.selector.start("SELECT AREA TO TRANSLATE"))
+
+    def on_free_area_selected(self, coords):
+        print(f"Free Area Selected: {coords}")
+        # We process immediately and DO NOT SAVE to config
+        self.run_in_thread(lambda: self.process_free_translation(coords))
+
+    def process_free_translation(self, coords):
+        print("Translating Free Area...")
+        # Use current threshold setting
+        text = engine.perform_ocr(coords, self.active_threshold)
+        
+        if text:
+            print(f"Found: {text[:20]}...")
+            translation = engine.translate_text(text)
+            # Show popup (No name header for free mode)
+            self.root.after(0, lambda: ui.show_popup(self.root, translation, name_header=None))
+        else:
+            print("No text found in selected area.")
+
+    # --- MAIN LOOP (AUTO & SAVED) ---
     def toggle_auto_mode(self):
         if not self.saved_dialogue_area:
             print("\n⚠️ No area configured! Press CTRL+ALT+S first.")
@@ -165,12 +187,13 @@ class App:
             
             time.sleep(1.0) 
 
-    def translate_single(self):
+    def translate_saved(self):
+        """Translates the currently saved dialogue area manually."""
         if not self.saved_dialogue_area:
             print("⚠️ Setup not complete. Press CTRL+ALT+S")
             return
 
-        print("Manual Translation...")
+        print("Manual Translation (Saved Area)...")
         
         name_text = ""
         if self.saved_name_area:
