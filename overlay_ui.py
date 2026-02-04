@@ -1,32 +1,37 @@
-# FILE: ui.py
+# FILE: overlay_ui.py
 import tkinter as tk
 
-popup_corrente = None
+current_popup = None
 
-class OverlaySelezione:
-    """(Questa parte rimane identica)"""
-    def __init__(self, root, callback_fine_selezione):
+class SelectionOverlay:
+    """
+    Transparent full-screen overlay to select the screen area with the mouse.
+    """
+    def __init__(self, root, on_selection_callback):
         self.root = root
-        self.callback = callback_fine_selezione
+        self.callback = on_selection_callback
         self.window = None
         self.canvas = None
         self.start_x = 0
         self.start_y = 0
         self.rect = None
 
-    def avvia(self):
+    def start(self):
         if self.window: return
+        
         self.window = tk.Toplevel(self.root)
         self.window.attributes('-fullscreen', True, '-alpha', 0.3, '-topmost', True)
         self.window.configure(bg='black', cursor="cross")
+        
         self.canvas = tk.Canvas(self.window, cursor="cross", bg="grey11")
         self.canvas.pack(fill="both", expand=True)
+        
         self.canvas.bind("<ButtonPress-1>", self._on_click)
         self.canvas.bind("<B1-Motion>", self._on_drag)
         self.canvas.bind("<ButtonRelease-1>", self._on_release)
-        self.window.bind("<Escape>", lambda e: self.chiudi())
+        self.window.bind("<Escape>", lambda e: self.close())
 
-    def chiudi(self):
+    def close(self):
         if self.window:
             self.window.destroy()
             self.window = None
@@ -43,94 +48,90 @@ class OverlaySelezione:
         x2, y2 = event.x, event.y
         left, top = min(x1, x2), min(y1, y2)
         right, bottom = max(x1, x2), max(y1, y2)
-        self.chiudi()
+        
+        self.close()
+        
+        # Prevent accidental micro-clicks
         if (right - left) > 10 and (bottom - top) > 10:
             self.callback((left, top, right, bottom))
 
-def chiudi_tutti_i_popup(event=None):
-    global popup_corrente
-    if popup_corrente:
+def close_all_popups(event=None):
+    global current_popup
+    if current_popup:
         try:
-            popup_corrente.destroy()
+            current_popup.destroy()
         except:
             pass
-        popup_corrente = None
+        current_popup = None
 
-def mostra_popup(root, testo, x_inutile, y_inutile):
-    """Mostra testo fluttuante SENZA SFONDO con bordo (Outline)"""
-    global popup_corrente
-    chiudi_tutti_i_popup()
+def show_popup(root, text, x_ignored, y_ignored):
+    """
+    Displays the translated text in a Cinema-Style floating window.
+    Features: No background (Chroma Key), Black Outline, Widescreen.
+    """
+    global current_popup
+    close_all_popups()
     
     popup = tk.Toplevel(root)
-    popup_corrente = popup 
+    current_popup = popup 
     popup.overrideredirect(True)
     popup.attributes('-topmost', True)
 
-    # --- IL TRUCCO DEL QUASI NERO ---
-    # 1. Impostiamo lo sfondo su Nero Puro
+    # --- CHROMA KEY TRICK ---
     PURE_BLACK = "#000000"
-    # 2. Impostiamo il bordo del testo su un grigio scurissimo (sembra nero all'occhio)
     OUTLINE_COLOR = "#111111" 
     
     popup.configure(bg=PURE_BLACK)
-    # 3. Rendiamo trasparente SOLO il Nero Puro. 
-    # Il bordo #111111 rimarrà visibile!
+    # Makes Pure Black transparent
     popup.wm_attributes("-transparentcolor", PURE_BLACK)
 
-    # Canvas per disegnare
     canvas = tk.Canvas(popup, bg=PURE_BLACK, highlightthickness=0)
     canvas.pack(fill="both", expand=True)
 
-    # Configurazione Font
+    # Font Config
     screen_width = root.winfo_screenwidth()
     max_width = 1200
-    FONT = ("Segoe UI Black", 16, "bold") # Font bello cicciotto
+    FONT = ("Segoe UI Black", 16, "bold") 
 
-    # Calcoliamo il centro provvisorio
+    # Temporary center
     cx = max_width / 2
-    cy = 100 # Altezza provvisoria
+    cy = 100 
 
-    # --- DISEGNO DEL BORDO (OUTLINE) ---
-    # Disegniamo il testo 8 volte spostato leggermente per fare il bordo spesso
+    # --- DRAW OUTLINE ---
     offsets = [(-2, -2), (-2, 0), (-2, 2), 
                (0, -2),           (0, 2), 
                (2, -2),  (2, 0),  (2, 2)]
     
-    # Lista per salvare gli ID degli oggetti disegnati
     items = []
     
-    # 1. Disegna l'ombra/bordo
+    # 1. Draw Outline (Dark Grey/Black)
     for ox, oy in offsets:
-        item = canvas.create_text(cx + ox, cy + oy, text=testo, font=FONT, 
+        item = canvas.create_text(cx + ox, cy + oy, text=text, font=FONT, 
                                   fill=OUTLINE_COLOR, width=max_width, justify="center")
         items.append(item)
 
-    # 2. Disegna il testo bianco sopra
-    text_item = canvas.create_text(cx, cy, text=testo, font=FONT, 
+    # 2. Draw Main Text (White)
+    text_item = canvas.create_text(cx, cy, text=text, font=FONT, 
                                    fill="white", width=max_width, justify="center")
     items.append(text_item)
 
-    # --- RIDIMENSIONAMENTO DINAMICO ---
-    # Chiediamo al Canvas: "Quanto spazio occupa veramente tutto questo testo?"
-    popup.update_idletasks() # Forza il calcolo grafico
-    bbox = canvas.bbox("all") # Prende il rettangolo che contiene tutto (x1, y1, x2, y2)
+    # --- DYNAMIC RESIZING ---
+    popup.update_idletasks() 
+    bbox = canvas.bbox("all") 
 
     if bbox:
-        # Calcoliamo larghezza e altezza reali + un po' di margine (padding)
         text_width = bbox[2] - bbox[0] + 20
         text_height = bbox[3] - bbox[1] + 20
         
-        # Spostiamo tutto il testo in modo che parta bene dall'alto (padding 10px)
-        # Calcoliamo di quanto spostare
         y_offset = 10 - bbox[1] 
         x_offset = 10 - bbox[0]
         for item in items:
             canvas.move(item, x_offset, y_offset)
 
-        # Ora ridimensioniamo la finestra esattamente su misura
+        # Center horizontally, fixed Y position
         x_pos = (screen_width - text_width) // 2
-        y_pos = 60 # Distanza dall'alto
+        y_pos = 60 
         popup.geometry(f"{text_width}x{text_height}+{x_pos}+{y_pos}")
 
-    # Chiudi al click
-    canvas.bind("<Button-1>", chiudi_tutti_i_popup)
+    # Close on click
+    canvas.bind("<Button-1>", close_all_popups)
