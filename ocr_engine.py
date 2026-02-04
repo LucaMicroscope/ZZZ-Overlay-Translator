@@ -1,64 +1,63 @@
-# FILE: engine.py
-from PIL import ImageGrab, ImageOps, Image, ImageEnhance # <--- Aggiunto ImageEnhance
+# FILE: ocr_engine.py
+from PIL import ImageGrab, ImageOps, Image, ImageEnhance
 import pytesseract
 from deep_translator import GoogleTranslator
 
-# Configurazione Tesseract (Usa il percorso giusto per il tuo PC)
-# Se hai seguito la guida automatica, potrebbe essere in AppData/Local/...
-# Se non va, prova a rimettere quello di Program Files.
+# TESSERACT CONFIGURATION
+# Using the path from your provided file
 pytesseract.pytesseract.tesseract_cmd = r'C:\program Files\Tesseract-OCR\tesseract.exe'
 
-def esegui_ocr(coordinate):
-    """Fa lo screenshot e applica un filtro ad alto contrasto per isolare il testo"""
+def perform_ocr(coordinates):
+    """
+    Captures screen area and applies high-contrast filters to isolate text.
+    Current Logic: Contrast 2.0 + Fixed Threshold 140.
+    """
     try:
-        # 1. CATTURA
-        img = ImageGrab.grab(bbox=coordinate)
+        # 1. Capture
+        img = ImageGrab.grab(bbox=coordinates)
         
-        # 2. INGRANDIMENTO (UPSCALE)
+        # 2. Upscale (3x Zoom)
         width, height = img.size
         img = img.resize((width * 3, height * 3), Image.Resampling.LANCZOS)
 
-        # 3. FILTRO "SUPERCLEAN" (Combinazione di Contrasto + Soglia)
-        img = img.convert('L') # Scala di grigi
+        # 3. Grayscale & Contrast
+        img = img.convert('L') 
         
-        # PASSO A: Aumentiamo il contrasto del 200%. 
-        # Questo rende il testo grigio -> BIANCO e lo sfondo grigio -> NERO.
+        # STEP A: Boost Contrast (200%)
+        # Makes gray text brighter and background darker.
         enhancer = ImageEnhance.Contrast(img)
         img = enhancer.enhance(2.0) 
         
-        # PASSO B: Pulizia finale (Soglia)
-        # Tutto ciò che è più scuro di 140 diventa Nero Assoluto.
-        # Tutto ciò che è più chiaro diventa Bianco Assoluto.
-        # 140 è il "punto dolce" per non cancellare il testo grigio chiaro.
+        # STEP B: Thresholding (Cleaning)
+        # 140 is the sweet spot to keep gray text visible while removing background.
         thresh = 140
         fn = lambda x : 255 if x > thresh else 0
         img = img.point(fn, mode='1')
 
-        # 4. INVERSIONE E BORDI
-        # Tesseract vuole testo nero su bianco
+        # 4. Invert (Black text on White background)
         img = ImageOps.invert(img.convert('RGB'))
         img = ImageOps.expand(img, border=20, fill='white')
 
-        # Salva debug per controllo (Guardalo sempre se la traduzione è strana!)
+        # Debug: Save what the robot sees
         img.save("debug_visione.png")
 
-        # 5. LETTURA (OCR)
+        # 5. OCR Reading
         config = r'--oem 3 --psm 6'
-        testo = pytesseract.image_to_string(img, lang='eng', config=config)
+        text = pytesseract.image_to_string(img, lang='eng', config=config)
         
-        # Pulizia stringa
-        testo_pulito = testo.strip().replace('\n', ' ').replace('|', 'I')
-        return testo_pulito
+        # Cleanup
+        clean_text = text.strip().replace('\n', ' ').replace('|', 'I')
+        return clean_text
 
     except Exception as e:
-        print(f"[Engine] Errore OCR: {e}")
+        print(f"[OCR Engine] Error: {e}")
         return None
 
-def traduci(testo):
-    if not testo:
+def translate_text(text):
+    if not text:
         return None
     try:
-        return GoogleTranslator(source='auto', target='it').translate(testo)
+        return GoogleTranslator(source='auto', target='it').translate(text)
     except Exception as e:
-        print(f"[Engine] Errore Traduzione: {e}")
-        return "Errore connessione"
+        print(f"[OCR Engine] Translation Error: {e}")
+        return "Connection Error"
