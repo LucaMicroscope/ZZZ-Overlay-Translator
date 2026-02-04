@@ -1,0 +1,22 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / Packaging (Quelli creati da PyInstaller)
+build/
+dist/
+*.spec
+
+# Virtual Environments
+venv/
+env/
+
+# Logs and Debug
+*.log
+debug_visione.png
+debug_visione.jpg
+
+# OS files
+.DS_Store
+Thumbs.db
