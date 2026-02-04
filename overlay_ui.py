@@ -15,7 +15,7 @@ class SelectionOverlay:
         self.start_x = 0
         self.start_y = 0
         self.rect = None
-        self.prompt_text = "" # Text to display (e.g. "SELECT NAME")
+        self.prompt_text = "" 
 
     def start(self, prompt="SELECT AREA"):
         if self.window: return
@@ -28,7 +28,6 @@ class SelectionOverlay:
         self.canvas = tk.Canvas(self.window, cursor="cross", bg="grey11")
         self.canvas.pack(fill="both", expand=True)
         
-        # Guide Text (Center screen)
         self.canvas.create_text(
             self.root.winfo_screenwidth() // 2, 
             self.root.winfo_screenheight() // 2,
@@ -100,32 +99,36 @@ def show_popup(root, text, name_header=None):
     max_width = 1200
     
     FONT_TEXT = ("Segoe UI Black", 16, "bold") 
-    FONT_NAME = ("Segoe UI Black", 16, "bold")
+    FONT_NAME = ("Segoe UI Black", 16, "bold") # Name font size increased to 16
 
-    # Temporary center
+    # Center Coordinates
     cx = max_width / 2
-    cy = 100 # Base Y for dialogue
+    cy = 100 
 
     items = []
     
+    # --- SHARED OUTLINE SETTINGS (THICK) ---
+    # We use these offsets for BOTH name and dialogue now
+    thick_offsets = [(-2, -2), (-2, 0), (-2, 2), 
+                     (0, -2),           (0, 2), 
+                     (2, -2),  (2, 0),  (2, 2)]
+
     # --- DRAW NAME (HEADER) IF EXISTS ---
     if name_header and len(name_header) > 1:
-        # Draw Name slightly above the dialogue (Gold color)
-        name_y = cy - 40 
+        # Moved UP significantly (-65 instead of -40) to avoid overlapping with big font
+        name_y = cy - 65 
         
-        # Name Outline
-        for ox, oy in [(-1,-1), (1,1), (-1,1), (1,-1)]:
+        # Name Outline (Now Thick!)
+        for ox, oy in thick_offsets:
             items.append(canvas.create_text(cx + ox, name_y + oy, text=name_header, font=FONT_NAME, 
                                             fill=OUTLINE_COLOR, width=max_width, justify="center"))
-        # Name Fill (Gold/Yellow)
+        # Name Fill (Gold)
         items.append(canvas.create_text(cx, name_y, text=name_header, font=FONT_NAME, 
                                         fill="#FFD700", width=max_width, justify="center"))
 
     # --- DRAW DIALOGUE ---
-    offsets = [(-2, -2), (-2, 0), (-2, 2), (0, -2), (0, 2), (2, -2), (2, 0), (2, 2)]
-    
     # Dialogue Outline
-    for ox, oy in offsets:
+    for ox, oy in thick_offsets:
         items.append(canvas.create_text(cx + ox, cy + oy, text=text, font=FONT_TEXT, 
                                         fill=OUTLINE_COLOR, width=max_width, justify="center"))
 
@@ -146,7 +149,6 @@ def show_popup(root, text, name_header=None):
         for item in items:
             canvas.move(item, x_offset, y_offset)
 
-        # Center horizontally, fixed Y position
         x_pos = (screen_width - text_width) // 2
         y_pos = 60 
         popup.geometry(f"{text_width}x{text_height}+{x_pos}+{y_pos}")
