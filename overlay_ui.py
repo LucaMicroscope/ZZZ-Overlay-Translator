@@ -15,9 +15,11 @@ class SelectionOverlay:
         self.start_x = 0
         self.start_y = 0
         self.rect = None
+        self.prompt_text = "" # Text to display (e.g. "SELECT NAME")
 
-    def start(self):
+    def start(self, prompt="SELECT AREA"):
         if self.window: return
+        self.prompt_text = prompt
         
         self.window = tk.Toplevel(self.root)
         self.window.attributes('-fullscreen', True, '-alpha', 0.3, '-topmost', True)
@@ -25,6 +27,13 @@ class SelectionOverlay:
         
         self.canvas = tk.Canvas(self.window, cursor="cross", bg="grey11")
         self.canvas.pack(fill="both", expand=True)
+        
+        # Guide Text (Center screen)
+        self.canvas.create_text(
+            self.root.winfo_screenwidth() // 2, 
+            self.root.winfo_screenheight() // 2,
+            text=self.prompt_text, fill="red", font=("Arial", 24, "bold")
+        )
         
         self.canvas.bind("<ButtonPress-1>", self._on_click)
         self.canvas.bind("<B1-Motion>", self._on_drag)
@@ -51,7 +60,6 @@ class SelectionOverlay:
         
         self.close()
         
-        # Prevent accidental micro-clicks
         if (right - left) > 10 and (bottom - top) > 10:
             self.callback((left, top, right, bottom))
 
@@ -64,10 +72,10 @@ def close_all_popups(event=None):
             pass
         current_popup = None
 
-def show_popup(root, text, x_ignored, y_ignored):
+def show_popup(root, text, name_header=None):
     """
-    Displays the translated text in a Cinema-Style floating window.
-    Features: No background (Chroma Key), Black Outline, Widescreen.
+    Displays the translated text + Character Name.
+    name_header: The character name (untranslated).
     """
     global current_popup
     close_all_popups()
@@ -82,7 +90,6 @@ def show_popup(root, text, x_ignored, y_ignored):
     OUTLINE_COLOR = "#111111" 
     
     popup.configure(bg=PURE_BLACK)
-    # Makes Pure Black transparent
     popup.wm_attributes("-transparentcolor", PURE_BLACK)
 
     canvas = tk.Canvas(popup, bg=PURE_BLACK, highlightthickness=0)
@@ -91,29 +98,40 @@ def show_popup(root, text, x_ignored, y_ignored):
     # Font Config
     screen_width = root.winfo_screenwidth()
     max_width = 1200
-    FONT = ("Segoe UI Black", 16, "bold") 
+    
+    FONT_TEXT = ("Segoe UI Black", 16, "bold") 
+    FONT_NAME = ("Segoe UI Black", 16, "bold")
 
     # Temporary center
     cx = max_width / 2
-    cy = 100 
+    cy = 100 # Base Y for dialogue
 
-    # --- DRAW OUTLINE ---
-    offsets = [(-2, -2), (-2, 0), (-2, 2), 
-               (0, -2),           (0, 2), 
-               (2, -2),  (2, 0),  (2, 2)]
-    
     items = []
     
-    # 1. Draw Outline (Dark Grey/Black)
-    for ox, oy in offsets:
-        item = canvas.create_text(cx + ox, cy + oy, text=text, font=FONT, 
-                                  fill=OUTLINE_COLOR, width=max_width, justify="center")
-        items.append(item)
+    # --- DRAW NAME (HEADER) IF EXISTS ---
+    if name_header and len(name_header) > 1:
+        # Draw Name slightly above the dialogue (Gold color)
+        name_y = cy - 40 
+        
+        # Name Outline
+        for ox, oy in [(-1,-1), (1,1), (-1,1), (1,-1)]:
+            items.append(canvas.create_text(cx + ox, name_y + oy, text=name_header, font=FONT_NAME, 
+                                            fill=OUTLINE_COLOR, width=max_width, justify="center"))
+        # Name Fill (Gold/Yellow)
+        items.append(canvas.create_text(cx, name_y, text=name_header, font=FONT_NAME, 
+                                        fill="#FFD700", width=max_width, justify="center"))
 
-    # 2. Draw Main Text (White)
-    text_item = canvas.create_text(cx, cy, text=text, font=FONT, 
-                                   fill="white", width=max_width, justify="center")
-    items.append(text_item)
+    # --- DRAW DIALOGUE ---
+    offsets = [(-2, -2), (-2, 0), (-2, 2), (0, -2), (0, 2), (2, -2), (2, 0), (2, 2)]
+    
+    # Dialogue Outline
+    for ox, oy in offsets:
+        items.append(canvas.create_text(cx + ox, cy + oy, text=text, font=FONT_TEXT, 
+                                        fill=OUTLINE_COLOR, width=max_width, justify="center"))
+
+    # Dialogue Fill (White)
+    items.append(canvas.create_text(cx, cy, text=text, font=FONT_TEXT, 
+                                   fill="white", width=max_width, justify="center"))
 
     # --- DYNAMIC RESIZING ---
     popup.update_idletasks() 
@@ -133,5 +151,4 @@ def show_popup(root, text, x_ignored, y_ignored):
         y_pos = 60 
         popup.geometry(f"{text_width}x{text_height}+{x_pos}+{y_pos}")
 
-    # Close on click
     canvas.bind("<Button-1>", close_all_popups)

@@ -4,13 +4,15 @@ import pytesseract
 from deep_translator import GoogleTranslator
 
 # TESSERACT CONFIGURATION
-# Using the path from your provided file
+# Using the path that works on your PC
 pytesseract.pytesseract.tesseract_cmd = r'C:\program Files\Tesseract-OCR\tesseract.exe'
 
-def perform_ocr(coordinates):
+def perform_ocr(coordinates, threshold=150):
     """
-    Captures screen area and applies high-contrast filters to isolate text.
-    Current Logic: Contrast 2.0 + Fixed Threshold 140.
+    Captures screen area and applies high-contrast filters.
+    threshold: 
+      - 150 (Standard): Good for gray text.
+      - 215 (High Contrast): Good for removing background noise.
     """
     try:
         # 1. Capture
@@ -24,14 +26,12 @@ def perform_ocr(coordinates):
         img = img.convert('L') 
         
         # STEP A: Boost Contrast (200%)
-        # Makes gray text brighter and background darker.
         enhancer = ImageEnhance.Contrast(img)
         img = enhancer.enhance(2.0) 
         
-        # STEP B: Thresholding (Cleaning)
-        # 140 is the sweet spot to keep gray text visible while removing background.
-        thresh = 140
-        fn = lambda x : 255 if x > thresh else 0
+        # STEP B: Thresholding (Dynamic)
+        # We use the 'threshold' parameter passed from main.py
+        fn = lambda x : 255 if x > threshold else 0
         img = img.point(fn, mode='1')
 
         # 4. Invert (Black text on White background)
