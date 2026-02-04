@@ -1,102 +1,99 @@
 # FILE: main.py
 import ctypes
 import time
+import threading
+import tkinter as tk
+import keyboard
+
+# Updated imports to match new filenames
+import ocr_engine as engine  
+import overlay_ui as ui      
+
+# DPI Awareness Fix
 try:
     ctypes.windll.shcore.SetProcessDpiAwareness(1)
 except Exception:
     ctypes.windll.user32.SetProcessDPIAware()
-
-import tkinter as tk
-import keyboard
-import engine
-import ui
-import threading 
 
 class App:
     def __init__(self):
         self.root = tk.Tk()
         self.root.withdraw()
         
-        self.area_salvata = None
+        self.saved_area = None
         self.auto_mode = False
-        self.ultimo_testo_letto = ""
+        self.last_text_read = ""
         
-        self.selettore = ui.OverlaySelezione(self.root, self.on_area_selezionata)
+        self.selector = ui.SelectionOverlay(self.root, self.on_area_selected)
 
-        print("--- TRADUTTORE ZZZ (Cinema Mode) ---")
-        print("CTRL+ALT+S -> Seleziona Area Dialogo")
-        print("CTRL+ALT+T -> Traduci (Manuale)")
-        print("CTRL+ALT+A -> Auto-Mode")
+        print("--- ZZZ OVERLAY TRANSLATOR (Cinema Mode) ---")
+        print("CTRL+ALT+S -> Select Dialogue Area")
+        print("CTRL+ALT+T -> Translate (Manual)")
+        print("CTRL+ALT+A -> Toggle Auto-Mode")
 
-        keyboard.add_hotkey('ctrl+alt+s', lambda: self.lancia_in_thread(self.selettore.avvia))
-        keyboard.add_hotkey('ctrl+alt+t', lambda: self.lancia_in_thread(self.traduci_singolo))
+        keyboard.add_hotkey('ctrl+alt+s', lambda: self.run_in_thread(self.selector.start))
+        keyboard.add_hotkey('ctrl+alt+t', lambda: self.run_in_thread(self.translate_single))
         keyboard.add_hotkey('ctrl+alt+a', self.toggle_auto_mode)
         
         self.root.mainloop()
 
-    def lancia_in_thread(self, funzione):
-        threading.Thread(target=funzione, daemon=True).start()
+    def run_in_thread(self, func):
+        threading.Thread(target=func, daemon=True).start()
 
-    def on_area_selezionata(self, coordinate):
-        self.area_salvata = coordinate
-        print(f"Area salvata: {coordinate}")
-        self.ultimo_testo_letto = "" 
-        self.lancia_in_thread(self.traduci_singolo)
+    def on_area_selected(self, coordinates):
+        self.saved_area = coordinates
+        print(f"Area saved: {coordinates}")
+        self.last_text_read = "" 
+        self.run_in_thread(self.translate_single)
 
     def toggle_auto_mode(self):
         self.auto_mode = not self.auto_mode
         if self.auto_mode:
             print("\n--- 🤖 AUTO-MODE ON ---")
-            self.lancia_in_thread(self.loop_automatico)
+            self.run_in_thread(self.auto_loop)
         else:
             print("\n--- 🛑 AUTO-MODE OFF ---")
 
-    def loop_automatico(self):
+    def auto_loop(self):
         while self.auto_mode:
-            if self.area_salvata:
+            if self.saved_area:
                 try:
-                    # Non chiudiamo più i popup qui.
-                    # Il popup è in alto, l'area è in basso. Nessun conflitto!
+                    # OCR Check
+                    new_text = engine.perform_ocr(self.saved_area)
                     
-                    nuovo_testo = engine.esegui_ocr(self.area_salvata)
-                    
-                    if (nuovo_testo and 
-                        len(nuovo_testo) > 5 and 
-                        nuovo_testo != self.ultimo_testo_letto):
+                    if (new_text and 
+                        len(new_text) > 5 and 
+                        new_text != self.last_text_read):
                         
-                        print(f"Cambio rilevato: {nuovo_testo[:20]}...")
-                        self.ultimo_testo_letto = nuovo_testo
+                        print(f"Change detected: {new_text[:20]}...")
+                        self.last_text_read = new_text
                         
-                        testo_ita = engine.traduci(nuovo_testo)
+                        translated_text = engine.translate_text(new_text)
                         
-                        # Passiamo x, y ma ui.py li ignorerà
-                        x, y = self.area_salvata[0], self.area_salvata[1]
-                        self.root.after(0, lambda: ui.mostra_popup(self.root, testo_ita, x, y))
+                        # Show popup (coordinates passed but ignored by UI for fixed position)
+                        x, y = self.saved_area[0], self.saved_area[1]
+                        self.root.after(0, lambda: ui.show_popup(self.root, translated_text, x, y))
                         
                 except Exception as e:
-                    print(f"Errore loop: {e}")
+                    print(f"Loop Error: {e}")
             
             time.sleep(1.0) 
 
-    def traduci_singolo(self):
-        if not self.area_salvata:
-            print("⚠️ Seleziona prima un'area!")
+    def translate_single(self):
+        if not self.saved_area:
+            print("⚠️ Please select an area first!")
             return
 
-        # RIMOSSO: self.root.after(0, ui.chiudi_tutti_i_popup)
-        # Non serve più chiudere, perché la traduzione appare in alto
-        # e non copre il testo del gioco!
-
-        print("Traduzione manuale...")
-        testo = engine.esegui_ocr(self.area_salvata)
+        print("Manual Translation...")
+        text = engine.perform_ocr(self.saved_area)
         
-        if testo:
-            self.ultimo_testo_letto = testo 
-            trad = engine.traduci(testo)
-            x, y = self.area_salvata[0], self.area_salvata[1]
-            self.root.after(0, lambda: ui.mostra_popup(self.root, trad, x, y))
+        if text:
+            self.last_text_read = text 
+            translation = engine.translate_text(text)
+            x, y = self.saved_area[0], self.saved_area[1]
+            self.root.after(0, lambda: ui.show_popup(self.root, translation, x, y))
         else:
-            print("Nessun testo trovato.")
+            print("No text found.")
 
 if __name__ == "__main__":
     App()
