@@ -74,7 +74,7 @@ def close_all_popups(event=None):
 def show_popup(root, text, name_header=None):
     """
     Displays the translated text + Character Name.
-    name_header: The character name (untranslated).
+    Uses Anchor 'N' (North) to prevent upward overlap.
     """
     global current_popup
     close_all_popups()
@@ -99,42 +99,46 @@ def show_popup(root, text, name_header=None):
     max_width = 1200
     
     FONT_TEXT = ("Segoe UI Black", 16, "bold") 
-    FONT_NAME = ("Segoe UI Black", 16, "bold") # Name font size increased to 16
+    FONT_NAME = ("Segoe UI Black", 16, "bold") 
 
-    # Center Coordinates
+    # Center X
     cx = max_width / 2
-    cy = 100 
-
-    items = []
     
-    # --- SHARED OUTLINE SETTINGS (THICK) ---
-    # We use these offsets for BOTH name and dialogue now
+    # --- POSITIONING LOGIC (TOP-DOWN) ---
+    # We define strictly where the Name starts and where Text starts.
+    # anchor='n' means "This Y coordinate is the CEILING, text hangs below it".
+    
+    items = []
     thick_offsets = [(-2, -2), (-2, 0), (-2, 2), 
                      (0, -2),           (0, 2), 
                      (2, -2),  (2, 0),  (2, 2)]
 
-    # --- DRAW NAME (HEADER) IF EXISTS ---
+    # 1. DRAW NAME (If present)
+    text_start_y = 10 # Default text start if no name
+    
     if name_header and len(name_header) > 1:
-        # Moved UP significantly (-65 instead of -40) to avoid overlapping with big font
-        name_y = cy - 65 
+        name_y = 10 # Name starts at 10px from top
         
-        # Name Outline (Now Thick!)
+        # Name Outline
         for ox, oy in thick_offsets:
             items.append(canvas.create_text(cx + ox, name_y + oy, text=name_header, font=FONT_NAME, 
-                                            fill=OUTLINE_COLOR, width=max_width, justify="center"))
-        # Name Fill (Gold)
+                                            fill=OUTLINE_COLOR, width=max_width, justify="center", anchor="n"))
+        # Name Fill
         items.append(canvas.create_text(cx, name_y, text=name_header, font=FONT_NAME, 
-                                        fill="#FFD700", width=max_width, justify="center"))
+                                        fill="#FFD700", width=max_width, justify="center", anchor="n"))
+        
+        # If name exists, push the text down by 45 pixels
+        text_start_y = 55 
 
-    # --- DRAW DIALOGUE ---
+    # 2. DRAW DIALOGUE TEXT (Strictly below Name)
     # Dialogue Outline
     for ox, oy in thick_offsets:
-        items.append(canvas.create_text(cx + ox, cy + oy, text=text, font=FONT_TEXT, 
-                                        fill=OUTLINE_COLOR, width=max_width, justify="center"))
+        items.append(canvas.create_text(cx + ox, text_start_y + oy, text=text, font=FONT_TEXT, 
+                                        fill=OUTLINE_COLOR, width=max_width, justify="center", anchor="n"))
 
-    # Dialogue Fill (White)
-    items.append(canvas.create_text(cx, cy, text=text, font=FONT_TEXT, 
-                                   fill="white", width=max_width, justify="center"))
+    # Dialogue Fill
+    items.append(canvas.create_text(cx, text_start_y, text=text, font=FONT_TEXT, 
+                                   fill="white", width=max_width, justify="center", anchor="n"))
 
     # --- DYNAMIC RESIZING ---
     popup.update_idletasks() 
@@ -144,13 +148,16 @@ def show_popup(root, text, name_header=None):
         text_width = bbox[2] - bbox[0] + 20
         text_height = bbox[3] - bbox[1] + 20
         
+        # Align everything to top-left margin (10px)
         y_offset = 10 - bbox[1] 
         x_offset = 10 - bbox[0]
+        
+        # Move works on the GROUP, preserving the gap between Name and Text
         for item in items:
             canvas.move(item, x_offset, y_offset)
 
         x_pos = (screen_width - text_width) // 2
-        y_pos = 60 
+        y_pos = 60 # Fixed position on screen
         popup.geometry(f"{text_width}x{text_height}+{x_pos}+{y_pos}")
 
     canvas.bind("<Button-1>", close_all_popups)
